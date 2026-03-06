@@ -20,20 +20,17 @@ Identifying a phishing email is only half the battle. To determine if the user f
 ---
 
 ## 🇹🇷 Türkçe - Amacımız
-Bu laboratuvarın amacı, karmaşık bir Zıpkınla Oltalama (Spear Phishing) saldırısı üzerinde tam bir **Olay Müdahalesi (Incident Response)** yaşam döngüsü yürütmektir. Senaryo, belirli bir kullanıcıyı hedef alan ve içinde Base64 ile şifrelenmiş zararlı bir yük barındıran sosyal mühendislik e-postasını içermektedir. Bu soruşturma sadece zararlı e-postayı tespit etmekle kalmaz; sistemin ele geçirildiğini (enfeksiyonu) kesin olarak kanıtlamak için **E-posta Ağ Geçidi** loglarını **Güvenlik Duvarı (Firewall)** trafiği ile ilişkilendirir.
+Bu laboratuvarın amacı, karmaşık bir **Spear Phishing** saldırısı üzerinde uçtan uca bir **Incident Response** yaşam döngüsü yürütmektir. Senaryo, spesifik bir kullanıcıyı hedef alan ve içinde Base64 ile encode edilmiş zararlı bir **payload** barındıran sosyal mühendislik e-postasını içermektedir. Bu analiz sadece zararlı e-postayı tespit etmekle kalmaz; sistemin **compromise** edildiğini (enfekte olduğunu) kesin olarak kanıtlamak için **Email Gateway** loglarını **Firewall** trafiği ile korele eder.
 
-### 1. Aşama: Teşhis ve Zararlı Yükü Çıkarma (E-posta Ağ Geçidi)
-Rutin log analizi (triage) sırasında, acil bir Microsoft Teams güncellemesi gibi görünen şüpheli bir e-posta tespit edilmiştir. İlgili URL şüpheli bir parametre içeriyordu. Splunk SPL (`rex` komutu) kullanılarak, analiz edilmek üzere ham logların içindeki Base64 şifreli zararlı yük dinamik olarak çıkarılmıştır.
+### 1. Aşama: Triage ve Payload Extraction (Email Gateway)
+Rutin log analizi (triage) sırasında, acil bir Microsoft Teams güncellemesi gibi görünen şüpheli bir e-posta tespit edilmiştir. İlgili URL şüpheli bir parametre içeriyordu. Splunk SPL (`rex` komutu) kullanılarak, analiz edilmek üzere raw logların içindeki Base64 şifreli **payload** dinamik olarak extract edilmiştir.
 * **SPL Sorgusu:** `index="phishing" "EMAIL_GATEWAY" "payload=" | rex field=_raw "payload=(?<Base64_Sifresi>[A-Za-z0-9+/=]+)" | table _time, FROM, TO, SUBJECT, Base64_Sifresi`
-* **Şifre Çözümü:** Çıkarılan Base64 metninin çözülmesi, asıl zararlı niyeti ortaya çıkarmıştır: `http://malicious-c2.com/ransomware.exe`
+* **Decoding:** Extract edilen Base64 string'inin decode edilmesi, asıl zararlı niyeti (malicious intent) ortaya çıkarmıştır: `http://malicious-c2.com/ransomware.exe`
 
 <img src="1-phishing-email-detected.png">
 
-### 2. Aşama: Enfeksiyon Doğrulaması (Güvenlik Duvarı Korelasyonu)
-Bir oltalama e-postasını tespit etmek savaşın sadece yarısıdır. Kullanıcının saldırıya kurban gidip gitmediğini belirlemek için ağın **Güvenlik Duvarı (Firewall) loglarına** geçiş yaptım. Çözülen zararlı URL'yi sorgulayarak, kullanıcının bağlantıya tıkladığını ve güvenlik duvarının 4MB'lık fidye virüsünün (ransomware) indirilmesine izin verdiğini (`ACTION=Allowed`) keşfettim. Bu durum, uç noktanın (endpoint) tamamen ele geçirildiğini doğrulamaktadır.
-* **SPL Sorgusu:** `index="phishing" "FIREWALL" "ransomware.exe"`
-
-<img src="2-firewall-infection-confirmed.png">
+### 2. Aşama: Infection Doğrulaması (Firewall Korelasyonu)
+Bir phishing e-postasını tespit etmek işin sadece yarısıdır. Kullanıcının saldırıya kurban gidip gitmediğini belirlemek için ağın **Firewall loglarına** pivot edilmiştir. Decode edilen zararlı URL sorgulanarak, kullanıcının bağlantıya tıkladığı ve firewall'un 4MB'lık **ransomware** (fidye yazılımı) indirilmesine izin verdiği (`ACTION=Allowed`) keşfedilmiştir. Bu durum, endpoint'in tamamen **compromise** edildiğini doğrulamaktadır.
 
 ## Conclusion / Sonuç
-Effective Incident Response requires cross-platform log correlation. Relying solely on email logs creates blind spots. By tracking the threat from the delivery mechanism (Email) to the execution phase (Firewall), a definitive timeline of the compromise was established. / *Etkili bir Olay Müdahalesi, çapraz platform log korelasyonu gerektirir. Sadece e-posta loglarına güvenmek kör noktalar yaratır. Tehdidi teslimat mekanizmasından (E-posta) yürütme aşamasına (Güvenlik Duvarı) kadar takip ederek, ihlalin kesin bir zaman çizelgesi başarıyla oluşturulmuştur.*
+Etkili bir Incident Response süreci, çapraz platform log korelasyonu gerektirir. Sadece email loglarına güvenmek kör noktalar yaratır. Tehdidi delivery (teslimat) aşamasından execution (çalıştırma) aşamasına kadar takip ederek, olayın kesin bir timeline'ı başarıyla oluşturulmuştur.
